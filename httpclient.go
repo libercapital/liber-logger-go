@@ -2,8 +2,6 @@ package liberlogger
 
 import (
 	"net/http"
-
-	"github.com/rs/zerolog/log"
 )
 
 // This type implements the http.RoundTripper interface
@@ -18,11 +16,9 @@ func (hc HttpClient) RoundTrip(req *http.Request) (res *http.Response, err error
 
 	extractBody(req, &bodyRequest)
 
-	ctx := log.Logger.WithContext(req.Context())
+	ctx := req.Context()
 
-	log.
-		Ctx(ctx).
-		Info().
+	Info(ctx).
 		Interface("headers", Redact(hc.RedactedKeys, hc.Maskedkeys, parseHeaders(req.Header))).
 		Interface("body", Redact(hc.RedactedKeys, hc.Maskedkeys, bodyRequest)).
 		Dict("extra", extraLogs(req, nil)).
@@ -31,9 +27,7 @@ func (hc HttpClient) RoundTrip(req *http.Request) (res *http.Response, err error
 	res, err = hc.Proxied.RoundTrip(req)
 
 	if err != nil {
-		log.
-			Ctx(ctx).
-			Error().
+		Error(ctx, err).
 			Interface("headers", Redact(hc.RedactedKeys, hc.Maskedkeys, parseHeaders(req.Header))).
 			Interface("body", Redact(hc.RedactedKeys, hc.Maskedkeys, bodyRequest)).
 			Dict("extra", extraLogs(req, err)).
@@ -43,9 +37,7 @@ func (hc HttpClient) RoundTrip(req *http.Request) (res *http.Response, err error
 
 		extractBody(res, &bodyResponse)
 
-		log.
-			Ctx(ctx).
-			Info().
+		Info(ctx).
 			Interface("headers", Redact(hc.RedactedKeys, hc.Maskedkeys, parseHeaders(res.Header))).
 			Interface("body", Redact(hc.RedactedKeys, hc.Maskedkeys, bodyResponse)).
 			Dict("extra", extraLogs(res, nil)).
@@ -55,14 +47,14 @@ func (hc HttpClient) RoundTrip(req *http.Request) (res *http.Response, err error
 	return
 }
 
-func (hc *HttpClient) AddKeysToMask(keys []string){
+func (hc *HttpClient) AddKeysToMask(keys []string) {
 	if hc.Maskedkeys != nil && keys != nil {
 		hc.Maskedkeys = append(hc.Maskedkeys, keys...)
 		return
 	}
 }
 
-func (hc *HttpClient) AddKeysToRedact(keys []string){
+func (hc *HttpClient) AddKeysToRedact(keys []string) {
 	if hc.RedactedKeys != nil && keys != nil {
 		hc.RedactedKeys = append(hc.RedactedKeys, keys...)
 		return

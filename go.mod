@@ -1,6 +1,6 @@
 module github.com/libercapital/liber-logger-go
 
-go 1.21
+go 1.22
 
 require (
 	github.com/google/uuid v1.6.0
@@ -8,6 +8,7 @@ require (
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/rs/zerolog v1.32.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.60.3
+	gorm.io/gorm v1.25.3
 )
 
 require (
@@ -25,8 +26,11 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.5.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.17.1 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

@@ -10,7 +10,7 @@ func EchoV4(routesIgnore []string) func(next echo.HandlerFunc) echo.HandlerFunc 
 		return func(c echo.Context) error {
 			var body interface{}
 
-			ctx := log.Logger.WithContext(c.Request().Context())
+			ctx := c.Request().Context()
 
 			if ignoreRoute(routesIgnore, c.Request()) {
 				return next(c)
@@ -19,9 +19,7 @@ func EchoV4(routesIgnore []string) func(next echo.HandlerFunc) echo.HandlerFunc 
 			err := extractBody(c.Request(), &body)
 
 			if err != nil {
-				log.
-					Ctx(ctx).
-					Error().
+				Error(ctx, err).
 					Interface("headers", parseHeaders(c.Request().Header)).
 					Interface("body", Redact([]string{}, []string{}, body)).
 					Dict("extra", extraLogs(c.Request(), err)).
@@ -30,9 +28,7 @@ func EchoV4(routesIgnore []string) func(next echo.HandlerFunc) echo.HandlerFunc 
 				return next(c)
 			}
 
-			log.
-				Ctx(ctx).
-				Info().
+			Info(ctx).
 				Interface("headers", parseHeaders(c.Request().Header)).
 				Interface("body", Redact([]string{}, []string{}, body)).
 				Dict("extra", extraLogs(c.Request(), nil)).
@@ -57,9 +53,7 @@ func EchoV4Redacted(redactKeys []string, maskKeys []string, routesIgnore []strin
 			err := extractBody(c.Request(), &body)
 
 			if err != nil {
-				log.
-					Ctx(ctx).
-					Error().
+				Error(ctx, err).
 					Interface("headers", Redact(redactKeys, maskKeys, parseHeaders(c.Request().Header))).
 					Interface("body", Redact(redactKeys, maskKeys, body)).
 					Dict("extra", extraLogs(c.Request(), err)).
@@ -68,9 +62,7 @@ func EchoV4Redacted(redactKeys []string, maskKeys []string, routesIgnore []strin
 				return next(c)
 			}
 
-			log.
-				Ctx(ctx).
-				Info().
+			Info(ctx).
 				Interface("headers", Redact(redactKeys, maskKeys, parseHeaders(c.Request().Header))).
 				Interface("body", Redact(redactKeys, maskKeys, body)).
 				Dict("extra", extraLogs(c.Request(), nil)).
