@@ -14,6 +14,7 @@ const (
 
 var DefaultKeys = []string{
 	"access_token",
+	"client_id",
 	"client_secret",
 	"Authorization",
 	"password",
