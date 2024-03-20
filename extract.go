@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 
@@ -39,7 +39,7 @@ func extractBody(request interface{}, parseTo interface{}) error {
 			return nil
 		}
 
-		bodyBytes, err = ioutil.ReadAll(request.Body)
+		bodyBytes, err = io.ReadAll(request.Body)
 
 		if err != nil {
 			return err
@@ -47,7 +47,7 @@ func extractBody(request interface{}, parseTo interface{}) error {
 
 		defer request.Body.Close()
 
-		request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	case *http.Response:
 		var err error
 
@@ -65,7 +65,7 @@ func extractBody(request interface{}, parseTo interface{}) error {
 			request.Body = reader
 		}
 
-		bodyBytes, err = ioutil.ReadAll(request.Body)
+		bodyBytes, err = io.ReadAll(request.Body)
 
 		if err != nil {
 			return err
@@ -73,7 +73,7 @@ func extractBody(request interface{}, parseTo interface{}) error {
 
 		defer request.Body.Close()
 
-		request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	default:
 		return errors.New("request is not a valid type")
 	}
