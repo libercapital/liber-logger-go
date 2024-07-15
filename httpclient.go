@@ -63,11 +63,8 @@ func (hc HttpClient) RoundTrip(req *http.Request) (res *http.Response, err error
 	res, err = hc.Proxied.RoundTrip(req)
 
 	if err != nil {
-		responseBody := hc.getResponseBody(res)
-
 		Error(ctx, err).
 			Interface("headers", Redact(hc.RedactedKeys, hc.Maskedkeys, parseHeaders(req.Header))).
-			Interface("body", responseBody).
 			Dict("extra", extraLogs(req, err)).
 			Msg(formatFinalMsg(req, "HTTP Client"))
 
