@@ -21,3 +21,6 @@
 
 # Go workspace file
 go.work
+
+# oh-my-claudecode
+.omc/
