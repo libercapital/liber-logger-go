@@ -76,18 +76,30 @@ func main() {
 
     e := echo.New()
 
-    e.Use(liberlogger.EchoV4Redacted(liberlogger.DefaultKeys, []string{}))
+    e.Use(liberlogger.EchoV4Redacted(liberlogger.DefaultKeys, liberlogger.DefaultKeysToMask, []string{"/health"}))
 
     //aditional keys
-    redactKeys := liberlogger.DefaultKeys
+    redactKeys := append(liberlogger.DefaultKeys, "reference_uuid", "document_number")
+    maskKeys := append(liberlogger.DefaultKeysToMask, "phone")
 
-    copy(redactKeys, []string{"reference_uuid", "document_number"})
-
-    e.Use(liberlogger.EchoV4Redacted(redactKeys, []string{"/health"}))
+    e.Use(liberlogger.EchoV4Redacted(redactKeys, maskKeys, []string{"/health"}))
 }
 ```
 
 </details>
+
+Every request that is not in the ignore list produces two logs:
+
+| Log | Message | Attributes |
+|---|---|---|
+| Request | `HTTP Server GET /payment-link/v1/checkout/955874a6-...` | `headers`, `body` and `extra` (`url`, `method`) of the request |
+| Response | `HTTP Server GET 200 /payment-link/v1/checkout/955874a6-...` | `headers`, `body` and `extra` (`url`, `method`, `status_code`) of the response |
+
+- The response status is the one sent to the client, including errors returned by the handler: the middleware calls `c.Error(err)` before logging and then returns `err`, like echo's `RequestLogger` with `HandleError: true`. A custom `HTTPErrorHandler` must skip responses that are already committed (`c.Response().Committed`), as the default one does.
+- Non-JSON response bodies (HTML, plain text) are logged as `{"plain/text-type": "<body>"}`.
+- `EchoV4Redacted` applies the redact and mask keys to the response headers and body too.
+- Register compression middlewares (e.g. `middleware.Gzip()`) before the logger, so it captures the uncompressed body.
+- A panicking handler recovered by an outer `middleware.Recover()` only produces the request log, since the panic unwinds past the logger (same as echo's `RequestLogger`).
 
 <br />
 

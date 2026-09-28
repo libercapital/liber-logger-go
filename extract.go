@@ -85,6 +85,20 @@ func extractBody(request interface{}, parseTo interface{}) error {
 	return json.Unmarshal(bodyBytes, parseTo)
 }
 
+func responseBody(buf *bytes.Buffer, redactKeys []string, maskKeys []string) any {
+	if buf.Len() == 0 {
+		return nil
+	}
+
+	var parsed any
+
+	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+		return Redact(redactKeys, maskKeys, buf.String())
+	}
+
+	return Redact(redactKeys, maskKeys, parsed)
+}
+
 func ignoreRedacted() bool {
 	zerologLevel := zerolog.GlobalLevel()
 

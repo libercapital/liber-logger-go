@@ -1,7 +1,10 @@
 package liberlogger
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
+	"net"
 	"net/http"
 )
 
@@ -124,4 +127,23 @@ func (w *LogResponseWriter) WriteHeader(code int) {
 func (w *LogResponseWriter) Write(body []byte) (int, error) {
 	w.buf.Write(body)
 	return w.ResponseWriter.Write(body)
+}
+
+func (w *LogResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *LogResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("liberlogger: underlying ResponseWriter does not implement http.Hijacker")
+	}
+
+	return hijacker.Hijack()
+}
+
+func (w *LogResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }

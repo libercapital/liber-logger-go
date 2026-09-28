@@ -44,6 +44,11 @@ func extraLogs(request interface{}, err error) *zerolog.Event {
 				"url":    request.Request.URL.String(),
 				"method": request.Request.Method,
 			})
+	case *LogResponseWriter:
+		log.
+			Interface("url", request.Request.URL.String()).
+			Interface("method", request.Request.Method).
+			Int("status_code", request.StatusCode)
 	}
 	return log
 }
