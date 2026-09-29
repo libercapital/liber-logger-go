@@ -103,6 +103,43 @@ Every request that is not in the ignore list produces two logs:
 
 <br />
 
+### Tracing Echo V4
+
+```golang
+package main
+
+import(
+    "github.com/libercapital/liber-logger-go.git"
+    "github.com/libercapital/liber-logger-go.git/tracing"
+    "github.com/labstack/echo/v4"
+)
+
+func main() {
+    liberlogger.Init(os.Getenv("LOG_LEVEL"))
+
+    tracing.StartTrace("service-name", os.Getenv("ENVIRONMENT"))
+    defer tracing.StopTrace()
+
+    e := echo.New()
+
+    e.Use(
+        tracing.EchoV4Trace(tracing.EchoV4Config{RoutesIgnore: []string{"/health"}}),
+        liberlogger.EchoV4Redacted(liberlogger.DefaultKeys, liberlogger.DefaultKeysToMask, []string{"/health"}),
+    )
+}
+```
+
+- `EchoV4Trace` creates an `http.request` server span per request (resource `GET /route/:param`, `http.status_code`), continuing the trace received in the `x-datadog-*`/`traceparent` headers.
+- Register it **before** `EchoV4Redacted`: it fills the request context with `dd.trace_id`/`dd.span_id`, so both `HTTP Server` logs (request and response) are correlated with the trace.
+- Requires `tracing.StartTrace`. An empty `ServiceName` uses the service given to `StartTrace`.
+- `RoutesIgnore` matches `c.Path()` (e.g. `/users/:id`) or the request path (e.g. `/health`). `IgnoreRequest` is an extra predicate, OR-ed with `RoutesIgnore`. Ignored requests have no span and no log fields.
+- `Options` are passed to the Data Dog `echotrace` middleware (e.g. `echotrace.WithHeaderTags`). An `echotrace.WithIgnoreRequest` in `Options` overrides both `RoutesIgnore` and `IgnoreRequest`; use `IgnoreRequest` instead.
+- The span `http.status_code` comes from the error returned by the handler: an `*echo.HTTPError` gives its code, and any other error gives `500`, even when a custom `HTTPErrorHandler` writes another status (e.g. `404`). Return `echo.NewHTTPError(...)` or pass `echotrace.WithErrorTranslator` in `Options` to map your errors.
+- Inside handlers behind `EchoV4Trace`, `tracing.StartContextAndSpan` starts a **child** of the server span (empty `OperationName` becomes `echo.handler`, empty `ResourceName` becomes the server resource), so `defer span.Finish()` in the handler does not finish the server span. Outside those handlers (consumers, lambdas, gorilla) it keeps reusing the span found in the context.
+- To propagate the trace to other services, send requests with the handler context (`http.NewRequestWithContext(c.Request().Context(), ...)`) through a client wrapped with `tracing.HttpTrace`.
+
+<br />
+
 ### HTTP Client
 
 <details>
@@ -220,7 +257,7 @@ func main() {
         fmt.Fprintf(rw, "ok")
     })
 
-    r.Use(liberlogger.GorillaMuxRedacted(liberlogger.DefaultKeys, []string{"/health"}))
+    r.Use(liberlogger.GorillaMuxRedacted(liberlogger.DefaultKeys, liberlogger.DefaultKeysToMask, []string{"/health"}))
 
     http.ListenAndServe(":8085", r)
 }
