@@ -45,6 +45,7 @@ type StartContextAndSpanConfig[T ResourceNameInterface, N TagsInterface] struct 
 // inside its handlers a child span is started, so the handler's span.Finish() does not finish the server span.
 // For that child, an empty OperationName becomes "echo.handler" and an empty ResourceName becomes the server resource.
 // The returned span must always be finished there, otherwise the whole request trace is not flushed.
+// Spans started in a ctx of an EchoV4Trace request use the service of its server span.
 func StartContextAndSpan(ctx context.Context, traceConfig SpanConfig) (context.Context, ddtrace.Span) {
 	echoServer, inEchoServer := echoServerSpanFromContext(ctx)
 	if inEchoServer {
@@ -58,7 +59,7 @@ func StartContextAndSpan(ctx context.Context, traceConfig SpanConfig) (context.C
 	}
 
 	opts := []ddtrace.StartSpanOption{
-		tracer.ServiceName(tracingParams.serviceName),
+		tracer.ServiceName(serviceFromContext(ctx)),
 		tracer.SpanType(traceConfig.SpanType),
 		tracer.ResourceName(traceConfig.ResourceName),
 	}
@@ -112,13 +113,22 @@ func echoServerSpanFromContext(ctx context.Context) (echoServerSpan, bool) {
 	return server, exist && span.Context().SpanID() == server.spanID
 }
 
+// serviceFromContext returns the service of the EchoV4Trace server span of the ctx, or the StartTrace service outside it.
+func serviceFromContext(ctx context.Context) string {
+	if server, ok := ctx.Value(echoServerSpanKey{}).(echoServerSpan); ok {
+		return server.service
+	}
+
+	return tracingParams.serviceName
+}
+
 func SpanFromContext(ctx context.Context) (ddtrace.Span, bool) {
 	return tracer.SpanFromContext(ctx)
 }
 
 func StartSpanFromContext(ctx context.Context, traceConfig SpanConfig) (ddtrace.Span, context.Context) {
 	opts := []ddtrace.StartSpanOption{
-		tracer.ServiceName(tracingParams.serviceName),
+		tracer.ServiceName(serviceFromContext(ctx)),
 		tracer.SpanType(traceConfig.SpanType),
 		tracer.ResourceName(traceConfig.ResourceName),
 	}

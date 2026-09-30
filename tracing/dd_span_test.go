@@ -216,3 +216,82 @@ func TestStartContextAndSpanOutsideEchoV4Trace(t *testing.T) {
 		requireLogFieldsOf(t, ctx, parent)
 	})
 }
+
+// setTracingService replaces the StartTrace service. Tests using it must not run in parallel.
+func setTracingService(t *testing.T, service string) {
+	t.Helper()
+
+	previous := tracingParams.serviceName
+	tracingParams.serviceName = service
+
+	t.Cleanup(func() { tracingParams.serviceName = previous })
+}
+
+func TestSpansInsideEchoV4TraceUseServerService(t *testing.T) {
+	tests := []struct {
+		name        string
+		serviceName string
+		wantService string
+	}{
+		{name: "custom ServiceName", serviceName: "custom-api", wantService: "custom-api"},
+		{name: "empty ServiceName uses the StartTrace service", serviceName: "", wantService: "global-service"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setTracingService(t, "global-service")
+			mt := startMockTracer(t)
+			captureLogs(t)
+
+			e := newTracedEcho(EchoV4Config{ServiceName: tt.serviceName}, http.MethodGet, "/users/:id", func(c echo.Context) error {
+				ctx, child := StartContextAndSpan(c.Request().Context(), SpanConfig{})
+				defer child.Finish()
+
+				grandchild, _ := StartSpanFromContext(ctx, SpanConfig{OperationName: "user.load"})
+				grandchild.Finish()
+
+				return c.NoContent(http.StatusOK)
+			})
+
+			serve(e, httptest.NewRequest(http.MethodGet, "/users/42", nil))
+
+			spans := mt.FinishedSpans()
+			if len(spans) != 3 {
+				t.Fatalf("expected 3 finished spans, got %d", len(spans))
+			}
+
+			for _, span := range spans {
+				// With an empty ServiceName the server span gets the tracer's global service, which the mocktracer
+				// does not set, so only the handler spans are checked.
+				if span.Tag(ext.SpanKind) == ext.SpanKindServer && tt.serviceName == "" {
+					continue
+				}
+
+				if got := span.Tag(ext.ServiceName); got != tt.wantService {
+					t.Errorf("%s service = %v, want %q", span.OperationName(), got, tt.wantService)
+				}
+			}
+		})
+	}
+}
+
+func TestSpansOutsideEchoV4TraceUseStartTraceService(t *testing.T) {
+	setTracingService(t, "global-service")
+	mt := startMockTracer(t)
+
+	ctx, span := StartContextAndSpan(context.Background(), SpanConfig{OperationName: "invoice.cmd"})
+	child, _ := StartSpanFromContext(ctx, SpanConfig{OperationName: "invoice.save"})
+	child.Finish()
+	span.Finish()
+
+	spans := mt.FinishedSpans()
+	if len(spans) != 2 {
+		t.Fatalf("expected 2 finished spans, got %d", len(spans))
+	}
+
+	for _, finished := range spans {
+		if got := finished.Tag(ext.ServiceName); got != "global-service" {
+			t.Errorf("%s service = %v, want global-service", finished.OperationName(), got)
+		}
+	}
+}

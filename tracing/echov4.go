@@ -13,6 +13,7 @@ type echoServerSpanKey struct{}
 type echoServerSpan struct {
 	spanID   uint64
 	resource string
+	service  string
 }
 
 // EchoV4Config configures EchoV4Trace.
@@ -21,10 +22,10 @@ type echoServerSpan struct {
 // any other error gives 500, even when a custom HTTPErrorHandler writes another status. Return echo.NewHTTPError,
 // or pass echotrace.WithErrorTranslator in Options, to keep the span status equal to the response status.
 type EchoV4Config struct {
-	ServiceName   string                    // Empty keeps the tracer's global service (tracing.StartTrace).
+	ServiceName   string                    // Empty keeps the tracer's global service (tracing.StartTrace). Also used by the spans started inside the handlers.
 	RoutesIgnore  []string                  // Routes without span nor log fields, matched against c.Path() or the request URL path.
 	IgnoreRequest func(c echo.Context) bool // Also skips the request when it returns true (OR-ed with RoutesIgnore).
-	Options       []echotrace.Option        // Extra echotrace options (e.g. echotrace.WithHeaderTags). An echotrace.WithIgnoreRequest here overrides RoutesIgnore and IgnoreRequest.
+	Options       []echotrace.Option        // Extra echotrace options (e.g. echotrace.WithHeaderTags). An echotrace.WithIgnoreRequest here overrides RoutesIgnore and IgnoreRequest, and an echotrace.WithServiceName is not seen by the handler spans; use ServiceName instead.
 }
 
 // EchoV4Trace creates a Data Dog server span for each request, continuing the trace received in the headers,
@@ -58,9 +59,15 @@ func EchoV4Trace(cfg EchoV4Config) echo.MiddlewareFunc {
 			ctx := req.Context()
 
 			if span, ok := SpanFromContext(ctx); ok {
+				service := cfg.ServiceName
+				if service == "" {
+					service = tracingParams.serviceName
+				}
+
 				ctx = context.WithValue(ctx, echoServerSpanKey{}, echoServerSpan{
 					spanID:   span.Context().SpanID(),
 					resource: req.Method + " " + c.Path(),
+					service:  service,
 				})
 
 				c.SetRequest(req.WithContext(AddTraceAndSpanToLog(ctx)))
