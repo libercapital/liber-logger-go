@@ -40,9 +40,26 @@ type StartContextAndSpanConfig[T ResourceNameInterface, N TagsInterface] struct 
 
 // StartContextAndSpan creates and retrieves a new context, filled with the log fields. Also start and return a new data dog span,
 // but is required the existence of a previous tracer, otherwise a noop span will be generated instead.
+//
+// When the ctx already has a span, that span is returned and reused, except for the server span created by EchoV4Trace:
+// inside its handlers a child span is started, so the handler's span.Finish() does not finish the server span.
+// For that child, an empty OperationName becomes "echo.handler" and an empty ResourceName becomes the server resource.
+// The returned span must always be finished there, otherwise the whole request trace is not flushed.
+// Spans started in a ctx of an EchoV4Trace request use the service of its server span.
 func StartContextAndSpan(ctx context.Context, traceConfig SpanConfig) (context.Context, ddtrace.Span) {
+	echoServer, inEchoServer := echoServerSpanFromContext(ctx)
+	if inEchoServer {
+		if traceConfig.OperationName == "" {
+			traceConfig.OperationName = "echo.handler"
+		}
+
+		if traceConfig.ResourceName == "" {
+			traceConfig.ResourceName = echoServer.resource
+		}
+	}
+
 	opts := []ddtrace.StartSpanOption{
-		tracer.ServiceName(tracingParams.serviceName),
+		tracer.ServiceName(serviceFromContext(ctx)),
 		tracer.SpanType(traceConfig.SpanType),
 		tracer.ResourceName(traceConfig.ResourceName),
 	}
@@ -54,7 +71,9 @@ func StartContextAndSpan(ctx context.Context, traceConfig SpanConfig) (context.C
 	traceConfig.Tags.toSpanTag(&opts)
 
 	span, exist := tracer.SpanFromContext(ctx)
-	if !exist {
+	if inEchoServer {
+		span, ctx = tracer.StartSpanFromContext(ctx, traceConfig.OperationName, opts...)
+	} else if !exist {
 		if traceConfig.TraceID > 0 {
 			childOfTrace := tracer.StartSpan(
 				traceConfig.OperationName,
@@ -82,13 +101,34 @@ func StartContextAndSpan(ctx context.Context, traceConfig SpanConfig) (context.C
 	return context.WithValue(ctx, liberlogger.LogFieldsKey{}, logFields), span
 }
 
+// echoServerSpanFromContext reports whether the current span of the ctx is the server span created by EchoV4Trace.
+func echoServerSpanFromContext(ctx context.Context) (echoServerSpan, bool) {
+	server, ok := ctx.Value(echoServerSpanKey{}).(echoServerSpan)
+	if !ok {
+		return echoServerSpan{}, false
+	}
+
+	span, exist := tracer.SpanFromContext(ctx)
+
+	return server, exist && span.Context().SpanID() == server.spanID
+}
+
+// serviceFromContext returns the service of the EchoV4Trace server span of the ctx, or the StartTrace service outside it.
+func serviceFromContext(ctx context.Context) string {
+	if server, ok := ctx.Value(echoServerSpanKey{}).(echoServerSpan); ok {
+		return server.service
+	}
+
+	return tracingParams.serviceName
+}
+
 func SpanFromContext(ctx context.Context) (ddtrace.Span, bool) {
 	return tracer.SpanFromContext(ctx)
 }
 
 func StartSpanFromContext(ctx context.Context, traceConfig SpanConfig) (ddtrace.Span, context.Context) {
 	opts := []ddtrace.StartSpanOption{
-		tracer.ServiceName(tracingParams.serviceName),
+		tracer.ServiceName(serviceFromContext(ctx)),
 		tracer.SpanType(traceConfig.SpanType),
 		tracer.ResourceName(traceConfig.ResourceName),
 	}
